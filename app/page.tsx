@@ -13,10 +13,17 @@ import { keccak256, stringToBytes } from 'viem'
 import { contractConfig } from './contract'
 import { uploadToIPFS } from './ipfs'
 import { QRCodeCanvas } from 'qrcode.react'
+import { trustRegistryConfig } from './trustRegistry'
 
 
 export default function Home() {
   const { address } = useAccount()
+  const { data: trustStatus, isLoading: trustLoading } = useReadContract({
+  ...trustRegistryConfig,
+  functionName: "isTrusted",
+  args: address ? [address] : undefined,
+})
+
   const config = useConfig()
 
   const { data, refetch } = useReadContract({
@@ -169,6 +176,24 @@ export default function Home() {
       </h1>
 
       <ConnectButton />
+      {address && (
+      <div className="mt-4 p-4 border rounded bg-gray-50">
+        <p className="text-sm font-semibold">Trust Registry Test</p>
+        {trustLoading ? (
+          <p>Checking trust status...</p>
+        ) : (
+          <p>
+            Trust Status:{" "}
+            {trustStatus ? (
+              <span className="text-green-600 font-bold">Trusted ✅</span>
+            ) : (
+              <span className="text-red-600 font-bold">Not Trusted ❌</span>
+            )}
+          </p>
+        )}
+      </div>
+    )}
+
 
       {address && (
         <>

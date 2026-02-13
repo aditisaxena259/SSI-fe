@@ -14,7 +14,7 @@ export default function VerifyPage() {
   const userParam = searchParams.get('user')
   const hashParam = searchParams.get('hash')
 
-  const [disclosedData, setDisclosedData] = useState<any>(null)
+  const [disclosedData, setDisclosedData] = useState<Record<string, any> | null>(null)
   const [inputAddress, setInputAddress] = useState('')
   const [credentials, setCredentials] = useState<any[]>([])
   const [verificationResult, setVerificationResult] = useState<string | null>(null)
@@ -46,7 +46,7 @@ export default function VerifyPage() {
       const creds = data as any[]
       setCredentials(creds)
 
-      // 🔥 AUTO VERIFY IF HASH PROVIDED
+      // Auto verify if hash present in URL
       if (hashParam) {
         const index = creds.findIndex(
           (cred) => cred.credentialHash === hashParam
@@ -71,7 +71,7 @@ export default function VerifyPage() {
     }
   }, [inputAddress])
 
-  // ---------------- VERIFY ----------------
+  // ---------------- VERIFY INTEGRITY ----------------
   async function verifyCredential(
     index: number,
     credsOverride?: any[]
@@ -107,7 +107,7 @@ export default function VerifyPage() {
     }
   }
 
-  // ---------------- SELECTIVE DISCLOSURE ----------------
+  // ---------------- DYNAMIC SELECTIVE DISCLOSURE ----------------
   async function selectiveDisclosure(index: number) {
     const cred = credentials[index]
 
@@ -118,10 +118,23 @@ export default function VerifyPage() {
 
       const json = await res.json()
 
-      setDisclosedData({
-        type: json.type,
-        year: json.year,
+      // Support both old format and new format
+      const credentialData = json.credential || json
+
+      // Remove internal/system fields
+      const filteredEntries = Object.entries(credentialData).filter(
+        ([key]) =>
+          key !== 'issuedTo' &&
+          key !== 'timestamp'
+      )
+
+      const dynamicFields: Record<string, any> = {}
+
+      filteredEntries.forEach(([key, value]) => {
+        dynamicFields[key] = value
       })
+
+      setDisclosedData(dynamicFields)
 
     } catch (err) {
       console.error(err)
@@ -184,14 +197,24 @@ export default function VerifyPage() {
         </div>
       )}
 
-      {/* 🔐 SELECTIVE DISCLOSURE DISPLAY */}
+      {/* 🔐 DYNAMIC DISCLOSURE DISPLAY */}
       {disclosedData && (
         <div className="mt-6 border p-4 rounded text-black bg-gray-100">
-          <h3 className="font-semibold mb-2 text-black">
+          <h3 className="font-semibold mb-2">
             Selectively Disclosed Information
           </h3>
-          <p><strong>Type:</strong> {disclosedData.type}</p>
-          <p><strong>Year:</strong> {disclosedData.year}</p>
+
+          {Object.entries(disclosedData).map(([key, value]) => (
+            <div
+              key={key}
+              className="flex justify-between border-b py-1"
+            >
+              <span className="font-medium capitalize">
+                {key}
+              </span>
+              <span>{String(value)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
