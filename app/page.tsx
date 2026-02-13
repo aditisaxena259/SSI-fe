@@ -30,12 +30,64 @@ export default function Home() {
   const [name, setName] = useState('')
   const [type, setType] = useState('')
   const [year, setYear] = useState('')
+  const [recipient, setRecipient] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // ---------------- EXTRACT ----------------
+
+  async function handleExtract() {
+    if (!file) {
+      alert('Upload a PDF first')
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/extract', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await res.json()
+
+      if (result.error) {
+        throw new Error(result.error)
+      }
+
+      if (!result.data) {
+        alert('Extraction failed')
+        return
+      }
+
+      // Auto-fill extracted values
+      setName(result.data.name ?? '')
+      setType(result.data.documentType ?? '')
+      setYear(result.data.year ?? '')
+      
+      alert('Data extracted successfully!')
+
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message || 'Extraction error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // ---------------- ISSUE ----------------
 
   async function handleIssue() {
     if (!address) return
+
+    // Address to issue credential to (defaults to self if empty)
+    const targetAddress = (recipient && recipient.startsWith('0x')) 
+      ? recipient as `0x${string}`
+      : address
 
     try {
       setLoading(true)
@@ -44,7 +96,7 @@ export default function Home() {
         name,
         type,
         year,
-        issuedTo: address,
+        issuedTo: targetAddress,
         timestamp: new Date().toISOString(),
       }
 
@@ -57,7 +109,7 @@ export default function Home() {
       const txHash = await writeContractAsync({
         ...contractConfig,
         functionName: 'issueCredential',
-        args: [address, hashValue, cid],
+        args: [targetAddress, hashValue, cid],
       })
 
       await waitForTransactionReceipt(config, { hash: txHash })
@@ -65,9 +117,15 @@ export default function Home() {
       setName('')
       setType('')
       setYear('')
+      setRecipient('')
+      setFile(null)
 
-      await refetch()
-      alert('Credential Issued Successfully!')
+      // Only refresh list if we issued to ourselves
+      if (targetAddress === address) {
+        await refetch()
+      }
+      
+      alert(`Credential successfully issued to ${targetAddress.slice(0, 6)}...${targetAddress.slice(-4)}`)
     } catch (err) {
       console.error(err)
       alert('Error issuing credential')
@@ -119,6 +177,47 @@ export default function Home() {
             <h2 className="text-xl font-semibold mb-4">
               Issue Credential
             </h2>
+
+            {/* 🔥 PDF Upload & Extract */}
+            <div className="mb-6 p-4 bg-gray-50 rounded border border-dashed border-gray-400">
+              <p className="text-sm font-bold mb-2">Auto-fill from PDF:</p>
+              <input
+                type="file"
+                accept="application/pdf"
+                className="block w-full text-sm text-slate-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-violet-50 file:text-violet-700
+                  hover:file:bg-violet-100
+                  mb-3"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setFile(e.target.files[0])
+                  }
+                }}
+              />
+              <button
+                className="bg-purple-600 text-white px-4 py-2 rounded text-sm w-full hover:bg-purple-700 transition"
+                onClick={handleExtract}
+                disabled={loading || !file}
+              >
+                {loading ? 'Extracting...' : 'Extract Data from PDF'}
+              </button>
+            </div>
+
+            <h3 className="text-lg font-medium mb-2">Credential Details</h3>
+
+            {/* Recipient Input (Optional) */}
+            <label className="block text-sm text-gray-700 mb-1">
+              Recipient Address (Optional)
+            </label>
+            <input
+              className="border p-2 mb-3 w-full font-mono text-sm"
+              placeholder={`e.g. 0x123... (Defaults to you)`}
+              value={recipient}
+              onChange={(e) => setRecipient(e.target.value)}
+            />
 
             <input
               className="border p-2 mb-3 w-full"
